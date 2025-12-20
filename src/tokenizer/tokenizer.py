@@ -13,22 +13,27 @@ class Tokenizer:
         self.vocab_length = vocab_length
         self.d_model = d_model
 
-        self.token_to_id_path = os.path.join(self.PROJECT_ROOT, "data/vocabulary/token_to_id.npy")
-        self.id_to_token_path = os.path.join(self.PROJECT_ROOT, "data/vocabulary/id_to_token.npy")
+        self.token_to_id_path = os.path.join(self.PROJECT_ROOT, "data/vocabulary/token_to_id.json")
+        self.id_to_token_path = os.path.join(self.PROJECT_ROOT, "data/vocabulary/id_to_token.json")
         self.rules_path = os.path.join(self.PROJECT_ROOT, "data/vocabulary/rules.json")
+        self.vocab_path = os.path.join(self.PROJECT_ROOT, "data/vocabulary/vocab.json")
 
-        if os.path.exists(self.token_to_id_path) and os.path.exists(self.id_to_token_path) and os.path.exists(self.rules_path):
-            with open(self.token_to_id_path, "r") as f:
-                self.token_to_id = json.load(f)
-            with open(self.id_to_token_path, "r") as f:
-                self.id_to_token = json.load(f)
-            with open(self.rules_path, "r") as f:
-                self.rules = json.load(f)
+        if not (os.path.exists(self.token_to_id_path) and os.path.exists(self.id_to_token_path) and os.path.exists(self.rules_path) and os.path.exists(self.vocab_path)):
+            self.tokenize_train()
+        with open(self.token_to_id_path, "r") as f:
+            self.token_to_id = json.load(f)
+        with open(self.id_to_token_path, "r") as f:
+            self.id_to_token = json.load(f)
+        with open(self.rules_path, "r") as f:
+            self.rules = json.load(f)
+        with open(self.vocab_path, "r") as f:
+            self.vocab = json.load(f)
+            
 
     def words(self, text):
         newline = r"[\n]"        
         words = re.sub(newline, " ", text)
-        words = words.split(" ")
+        words = words.split()
         return words
 
     def characterize(self, text, protected = None):
@@ -44,14 +49,15 @@ class Tokenizer:
             else:
                 characters.extend([char for char in word])
             characters.append("</w>")            
-        
+
         return characters
     
     def bpe_train(self):
         characters = self.characterize(self.meditations, self.protected_tokens)
 
         vocab = sorted(list(set(characters)))
-        
+        vocab.append("<UNK>")
+
         self.rules = []
         while len(vocab) < self.vocab_length:
             
@@ -68,6 +74,10 @@ class Tokenizer:
 
         
             rules = Counter(pairs).most_common()
+
+            if not rules:
+                print("Rules not found")
+                break
             
             for i in rules:
                 rulestr = ""
@@ -112,28 +122,24 @@ class Tokenizer:
             json.dump(id_to_token, file)
         self.id_to_token = id_to_token
 
-        if os.path.exists(os.path.join(self.PROJECT_ROOT, 'data/vocabulary/embeddings.npy')):
-            E = np.load(os.path.join(self.PROJECT_ROOT, 'data/vocabulary/embeddings.npy'))
-        else:
-            E = np.random.normal(0, 0.02, (self.vocab_length, self.d_model))
-        self.E = E
+        self.embeddings_path = os.path.join(self.PROJECT_ROOT, 'data/vocabulary/embeddings.npy')
 
-        if not os.path.exists(os.path.join(self.PROJECT_ROOT, "data/vocabulary/embeddings.npy")):
-            np.save(os.path.join(self.PROJECT_ROOT, "data/vocabulary/embeddings.npy"), E)
+        if os.path.exists(self.embeddings_path):
+            self.E = np.load(self.embeddings_path)
+        else:
+            self.E = np.random.normal(0, 0.02, (self.vocab_length, self.d_model))
+            np.save(self.embeddings_path, self.E)
         
-        with open(os.path.join(self.PROJECT_ROOT, "data/vocabulary/rules.json"), "w") as f:
+        with open(self.rules_path, "w") as f:
             json.dump(self.rules, f)
+
+        with open(self.vocab_path, "w") as f:
+            json.dump(self.vocab, f)
 
     def tokenize(self, input_str):
         tokens = self.characterize(input_str, self.protected_tokens)
 
-
-        with open(os.path.join(self.PROJECT_ROOT, "data/vocabulary/rules.json"), "r") as f:
-            self.rules = json.load(f)
-
-        #I will allow this to throw an exception manally, meaning it is out of sequence
-
-        i = 0
+        #I will allow this to throw an exception manually, meaning it is out of sequence
         
         for rule in self.rules:
             new_tokens = []
@@ -152,12 +158,28 @@ class Tokenizer:
 
     def encode(self, input_str):
         tokens = self.tokenize(input_str)
-        return [self.token_to_id[token] for token in tokens]
-    
-    def decode(self, input_nums):
-        return [self.id_to_token[int(i)] for i in input_nums]
-    
-    def tpw_ratio(self, text):
-        unique_words = self.tokenize(text)
-        return len(unique_words) / self.vocab_length
         
+        encoded = []
+
+        for token in tokens:
+            if token in self.vocab:
+                encoded.append(self.token_to_id[token])
+
+            else:
+                encoded.append(self.token_to_id["<UNK>"])
+        return encoded
+
+    def decode(self, input_nums):
+        return [self.id_to_token[str(i)] for i in input_nums]
+    
+    def tpw_ratio(self):
+        unique_words = len(self.words(self.meditations))
+        unique_tokens = len(self.tokenize(self.meditations))
+
+        if unique_words == 0:
+            return 0
+        return unique_tokens / unique_words
+        
+
+tokenizer = Tokenizer()
+print(tokenizer.tpw_ratio())

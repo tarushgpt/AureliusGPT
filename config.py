@@ -8,5 +8,6 @@ d_ff = 1024
 max_seq_length = 512
 lr = 0.001
 num_blocks = 3
-vocab_length = 7000
+vocab_length = 1000
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+min_freq = 30

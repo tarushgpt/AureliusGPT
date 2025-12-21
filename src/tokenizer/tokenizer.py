@@ -1,7 +1,7 @@
 from collections import Counter
 import numpy as np
 import re, json, os
-from config import d_model, max_seq_length, vocab_length, PROJECT_ROOT
+from config import d_model, max_seq_length, vocab_length, PROJECT_ROOT, min_freq
 
 
 class Tokenizer:
@@ -12,6 +12,7 @@ class Tokenizer:
             self.meditations = f.read()
         self.vocab_length = vocab_length
         self.d_model = d_model
+        self.min_freq = min_freq
 
         self.token_to_id_path = os.path.join(self.PROJECT_ROOT, "data/vocabulary/token_to_id.json")
         self.id_to_token_path = os.path.join(self.PROJECT_ROOT, "data/vocabulary/id_to_token.json")
@@ -29,10 +30,11 @@ class Tokenizer:
         with open(self.vocab_path, "r") as f:
             self.vocab = json.load(f)
             
-
     def words(self, text):
         newline = r"[\n]"        
+        punctuation = r"([.,;:!?\"'])"
         words = re.sub(newline, " ", text)
+        words = re.sub(punctuation, r" \1 ", words)
         words = words.split()
         return words
 
@@ -42,15 +44,17 @@ class Tokenizer:
         characters = []
 
         for word in words: 
-            if protected and word not in protected:
+            if protected and word.lower() not in protected:
+                characters.append("_")
                 characters.extend([char for char in word])
-            elif protected and word in protected:
-                characters.append(word)
+            elif protected and word.lower() in protected:
+                characters.append("_")
+                characters.append(word.lower())
             else:
+                characters.append("_")
                 characters.extend([char for char in word])
-            characters.append("</w>")            
 
-        return characters
+        return characters 
     
     def bpe_train(self):
         characters = self.characterize(self.meditations, self.protected_tokens)
@@ -59,39 +63,49 @@ class Tokenizer:
         vocab.append("<UNK>")
 
         self.rules = []
+
         while len(vocab) < self.vocab_length:
             
             a = 0
             pairs = []
 
             while a < len(characters) - 1:
-                if not characters[a+1] == "</w>":
+                if not "_" in characters[a+1]:
                     pair = (characters[a], characters[a+1])
                     pairs.append(pair)
-                    a += 1
-                else:
-                    a += 2
+                a += 1
 
         
             rules = Counter(pairs).most_common()
-
-            if not rules:
-                print("Rules not found")
-                break
             
+            #rule selection
+
+            rule = None
+
             for i in rules:
+                
+                #vocab based check
                 rulestr = ""
                 for char in i[0]: rulestr += char
-                if rulestr in vocab: continue
+
+                #gain based check
+                frequency = i[1]
+
+                if rulestr in vocab or frequency < self.min_freq:
+                    continue
                 else:
                     rule = i
                     vocab.append(rulestr)
                     break
 
+            if rule is None:
+                break
+
             i = 0
             characters2 = []
             while i < len(characters):
-                if i < len(characters) - 1 and characters[i] == rule[0][0] and characters[i+1] == rule[0][1]:
+                if rule and i < len(characters) - 1 and characters[i] == rule[0][0] and characters[i+1] == rule[0][1]:
+                    
                     merged = rule[0][0] + rule[0][1]
                     characters2.append(merged)
                     i += 2
@@ -102,10 +116,11 @@ class Tokenizer:
 
             characters = characters2
 
-            self.rules.append((rule[0]))
+            if rule: self.rules.append((rule[0])) 
 
         self.vocab = vocab
-        
+
+
     def tokenize_train(self):
         self.bpe_train()
         token_to_id = {}
@@ -127,7 +142,7 @@ class Tokenizer:
         if os.path.exists(self.embeddings_path):
             self.E = np.load(self.embeddings_path)
         else:
-            self.E = np.random.normal(0, 0.02, (self.vocab_length, self.d_model))
+            self.E = np.random.normal(0, 0.02, (len(self.vocab), self.d_model))
             np.save(self.embeddings_path, self.E)
         
         with open(self.rules_path, "w") as f:
@@ -162,23 +177,27 @@ class Tokenizer:
         encoded = []
 
         for token in tokens:
-            if token in self.vocab:
-                encoded.append(self.token_to_id[token])
 
-            else:
+            try:
+                encoded.append(self.token_to_id[token])
+            except Exception:
                 encoded.append(self.token_to_id["<UNK>"])
+                
         return encoded
 
     def decode(self, input_nums):
         return [self.id_to_token[str(i)] for i in input_nums]
     
     def tpw_ratio(self):
-        unique_words = len(self.words(self.meditations))
-        unique_tokens = len(self.tokenize(self.meditations))
+        words = self.words(self.meditations)
+        tokens = self.tokenize(self.meditations)
 
-        if unique_words == 0:
+        if len(words) == 0:
             return 0
-        return unique_tokens / unique_words
+        
+        tokens = [t for t in tokens if t != "_"]
+
+        return len(tokens) / len(words)
         
 
 tokenizer = Tokenizer()

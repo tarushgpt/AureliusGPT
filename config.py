@@ -20,4 +20,4 @@ min_freq = 30
 n = 10000
 epsilon = 10**-8
 max_tokens_inference = 50
-temperature = 1
+temperature = 1.5

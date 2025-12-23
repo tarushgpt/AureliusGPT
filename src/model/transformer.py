@@ -11,10 +11,11 @@ class Transformer:
         self.relpath = os.path.join(PROJECT_ROOT, "data", "weights")
         self.blocks = [TransformerBlock(num, self.relpath) for num in range(num_blocks)]
         self.Wo_path = os.path.join(self.relpath, "Wo.npy")
+        actual_vocab_size = len(tokenizer.vocab)
         if os.path.exists(self.Wo_path):
             self.Wo = np.load(self.Wo_path)
         else:
-            self.Wo = np.random.normal(0, 0.02, (d_model, vocab_length))
+            self.Wo = np.random.normal(0, 0.02, (d_model, actual_vocab_size))
             np.save(self.Wo_path, self.Wo)
         self.lr = lr
 

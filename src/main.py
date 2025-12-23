@@ -56,17 +56,11 @@ class Test:
 
         while len(tokens) < max_tokens_inference:
 
-            output = self.transformer.forward(tokens)[-1]
-
-            if temperature > 1.0:
-                logits = np.log(output + epsilon)
-                logits = logits / temperature
-                output = np.exp(logits)/np.sum(np.exp(logits))
-                next_token = np.random.choice(len(output), p=output)
-
-            else:
-                output = self.util.softmax(output, -1)
-                next_token = np.argmax(output)
+            logits = self.transformer.forward(tokens)[-1]
+            
+            logits = logits / temperature
+            probs = self.util.softmax(logits, -1)
+            next_token = np.random.choice(len(probs), p=probs)
 
             if next_token == eos_token_id:
                 break

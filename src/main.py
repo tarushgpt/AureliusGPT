@@ -1,5 +1,5 @@
-from tokenizer.tokenizer import Tokenizer
-from model.transformer import Transformer
+from src.tokenizer.tokenizer import Tokenizer
+from src.model.transformer import Transformer
 import concurrent.futures
 import numpy as np
 from config import max_tokens_inference, temperature, epsilon
@@ -28,7 +28,7 @@ class Train:
 
         dL_dlogits = self.transformer.ce_loss_gradient(output_tokens, logits)
         
-        self.transformer.backwards(dL_dlogits, input_tokens)
+        self.transformer.backward(dL_dlogits, input_tokens)
         return loss
 
 
@@ -52,7 +52,7 @@ class Test:
         print("\n")
 
         tokens = self.tokenizer.encode(user_input)
-        eos_token_id = self.tokenizer.token_to_id("<EOS>")
+        eos_token_id = self.tokenizer.token_to_id["<EOS>"]
 
         while len(tokens) < max_tokens_inference:
 

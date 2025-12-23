@@ -60,9 +60,8 @@ class Tokenizer:
         characters = self.characterize(self.meditations, self.protected_tokens)
         vocab = sorted(list(set(characters)))
         vocab.append("<UNK>")
-        vocab.append("<EOS>")  
-
-        vocab.insert(0, "<BEGIN>")
+        vocab.append("<EOS>")
+        vocab.append("<BEGIN>")
         
         self.rules = []
 
@@ -120,7 +119,6 @@ class Tokenizer:
 
             if rule: self.rules.append((rule[0])) 
 
-        vocab.insert(0, "<BEGIN>")
         self.vocab = vocab
 
     def tokenize_train(self):
@@ -214,7 +212,7 @@ class Tokenizer:
         
     def tokenize_and_chunk_corpus(self):
         chunked = []
-        encoded = self.tokenize(self.meditations)
+        encoded = self.encode(self.meditations)
 
         encoded = [self.token_to_id["<BEGIN>"]] + encoded
 
@@ -225,11 +223,6 @@ class Tokenizer:
         if remainder != 0:
             chunked.append(encoded[len(encoded)-max_seq_length : len(encoded)])
         return chunked
-
-token = Tokenizer()
-chunked = token.tokenize_and_chunk_corpus()
-total_str = ""
-for i in chunked[0]:
-    total_str += str(i)
-
-print(total_str.replace("_", " "))
+    
+    def save_embeddings(self):
+        np.save(self.embeddings_path, self.E)

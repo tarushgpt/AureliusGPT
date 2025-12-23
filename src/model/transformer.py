@@ -17,21 +17,29 @@ class Transformer:
             self.Wo = np.random.normal(0, 0.02, (d_model, vocab_length))
             np.save(self.Wo_path, self.Wo)
 
-    def forward(self, encoded):
+    def forward(self, encoded, apply_soft=False):
         X = self.tokenizer.embed(encoded) + self.tokenizer.positional(encoded)
 
-        Y = self.blocks[0].forward(X)
-
-        for pos in range(len(self.blocks)-1):
-            Y = self.blocks[pos+1].forward(Y)
+        Y = X
+        for block in self.blocks:
+            Y = block.forward(Y)
 
         logits = Y @ self.Wo
-    
-        return self.util.softmax(logits, -1)
+        if apply_soft:
+            return self.util.softmax(logits, -1)
+        return logits
 
 
-    def ce_loss(self, probability, actual):
-        return -np.log(probability[actual])
+    def ce_loss(self, targets, logits):
+            logits_max = np.max(logits, axis=-1, keepdims=True)
+            logits_shifted = logits - logits_max
+            
+            log_sum_exp = np.log(np.sum(np.exp(logits_shifted), axis=-1, keepdims=True))
+            log_probs = logits_shifted - log_sum_exp
+            
+            target_log_probs = log_probs[np.arange(len(targets)), targets]
+            
+            return -np.mean(target_log_probs)
 
 class TransformerBlock:
     def __init__(self, num, path):

@@ -2,8 +2,9 @@ from tokenizer.tokenizer import Tokenizer
 from model.transformer import Transformer
 import concurrent.futures
 import numpy as np
-from config import max_tokens_inference
+from config import max_tokens_inference, temperature, epsilon
 import argparse
+from util import Util
 
 class Train:
     def __init__(self):
@@ -22,27 +23,20 @@ class Train:
         input_tokens = chunk[:-1]
         output_tokens = chunk[1:]
 
+        logits = self.transformer.forward(input_tokens)
+        loss = self.transformer.ce_loss(output_tokens, logits)        
 
-        probability_distribution = self.transformer.forward(input_tokens)
+        dL_dlogits = self.transformer.ce_loss_gradient(output_tokens, logits)
         
-        losses = []
-
-        for i in range(len(probability_distribution)):
-            predicted_distribution = probability_distribution[i]
-            actual_token = output_tokens[i]
-            losses.append(self.transformer.ce_loss(predicted_distribution, actual_token))
-        
-        dL = np.mean(losses) #dL needs to be changed
-
-        gradients = self.transformer.backward(dL)
-
-        #update all gradients; that is one chunk completed
+        self.transformer.backwards(dL_dlogits, input_tokens)
+        return loss
 
 
 class Test:
     def __init__(self):
         self.tokenizer = Tokenizer()
         self.transformer = Transformer(self.tokenizer)
+        self.util = Util()
     
     def main(self):
         print("Welcome to AureliusGPT! Please press 'Enter' to break.\n\n")
@@ -64,7 +58,15 @@ class Test:
 
             output = self.transformer.forward(tokens)[-1]
 
-            next_token = np.argmax(output)
+            if temperature > 1.0:
+                logits = np.log(output + epsilon)
+                logits = logits / temperature
+                output = np.exp(logits)/np.sum(np.exp(logits))
+                next_token = np.random.choice(len(output), p=output)
+
+            else:
+                output = self.util.softmax(output, -1)
+                next_token = np.argmax(output)
 
             if next_token == eos_token_id:
                 break

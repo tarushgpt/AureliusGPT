@@ -1,18 +1,14 @@
 from collections import Counter
 import numpy as np
 import re, json, os
-from config import d_model, max_seq_length, vocab_length, PROJECT_ROOT, min_freq, n
-
+from config import d_model, max_seq_length, vocab_length, PROJECT_ROOT, min_freq, n, greek_transliteration
+from scripts.preprocess import Preprocessor
 
 class Tokenizer:
     def __init__(self):
-        self.protected_tokens = set(["emphron", "sumphron", "huperphron", "nomos", "nemon", "axiopistos", "theophoretos", "oikonomian", "touto", "eferen", "auto", "eumoiros", "eudaimonia", "eupatridai", "kathoti", "katorthoseos", "kosmos", "melos", "meros", "pareilephamen", "symbainein", "tasis", "agathos", "aktines", "ekteinesthai", "daimon", "katorthoseis", "auto"])
-        with open(os.path.join(PROJECT_ROOT, "data", "processed", "meditations.txt"), "r") as f:
-            self.meditations = f.read()
-        self.vocab_length = vocab_length
-        self.d_model = d_model
-        self.min_freq = min_freq
-        self.n = n
+        self.preprocess = Preprocessor()
+        self.protected_tokens = set(greek_transliteration)
+        self.meditations = self.preprocess.meditations
 
         self.token_to_id_path = os.path.join(PROJECT_ROOT, "data", "vocabulary", "token_to_id.json")
         self.id_to_token_path = os.path.join(PROJECT_ROOT, "data", "vocabulary", "id_to_token.json")
@@ -20,7 +16,8 @@ class Tokenizer:
         self.vocab_path = os.path.join(PROJECT_ROOT, "data", "vocabulary", "vocab.json")
         self.embeddings_path = os.path.join(PROJECT_ROOT, "data", "vocabulary", "embeddings.npy")
 
-
+        
+        #identified the OS hell. this is the biggest problem in the current code
         if not (os.path.exists(self.token_to_id_path) and os.path.exists(self.id_to_token_path) and os.path.exists(self.rules_path) and os.path.exists(self.vocab_path) and os.path.exists(self.embeddings_path)):
             self.tokenize_train()
         with open(self.token_to_id_path, "r") as f:
@@ -61,14 +58,15 @@ class Tokenizer:
     
     def bpe_train(self):
         characters = self.characterize(self.meditations, self.protected_tokens)
-
-
         vocab = sorted(list(set(characters)))
         vocab.append("<UNK>")
+        vocab.append("<EOS>")  
 
+        vocab.insert(0, "<BEGIN>")
+        
         self.rules = []
 
-        while len(vocab) < self.vocab_length:
+        while len(vocab) < vocab_length:
             
             a = 0
             pairs = []
@@ -95,7 +93,7 @@ class Tokenizer:
                 #gain based check
                 frequency = i[1]
 
-                if rulestr in vocab or frequency < self.min_freq:
+                if rulestr in vocab or frequency < min_freq:
                     continue
                 else:
                     rule = i
@@ -144,7 +142,7 @@ class Tokenizer:
         if os.path.exists(self.embeddings_path):
             self.E = np.load(self.embeddings_path)
         else:
-            self.E = np.random.normal(0, 0.02, (len(self.vocab), self.d_model))
+            self.E = np.random.normal(0, 0.02, (len(self.vocab), d_model))
             np.save(self.embeddings_path, self.E)
         
         with open(self.rules_path, "w") as f:
@@ -194,12 +192,12 @@ class Tokenizer:
         return X
 
     def positional(self, encoded):
-        positionals = np.zeros((len(encoded), self.d_model))
+        positionals = np.zeros((len(encoded), d_model))
         for pos in range(len(encoded)):
-            for i in range(0, self.d_model, 2):
-                denominator = self.n ** (i / self.d_model)
+            for i in range(0, d_model, 2):
+                denominator = n ** (i / d_model)
                 positionals[pos, i] = np.sin(pos / denominator)
-                if i + 1 < self.d_model:
+                if i + 1 < d_model:
                     positionals[pos, i + 1] = np.cos(pos / denominator)
         return positionals
 
@@ -216,7 +214,10 @@ class Tokenizer:
         
     def tokenize_and_chunk_corpus(self):
         chunked = []
-        encoded = self.encode(self.meditations)
+        encoded = self.tokenize(self.meditations)
+
+        encoded = [self.token_to_id["<BEGIN>"]] + encoded
+
         remainder = len(encoded) % max_seq_length
         for i in range(0, len(encoded), max_seq_length):
             chunk = [0] + encoded[i:i+max_seq_length-1]
@@ -224,3 +225,11 @@ class Tokenizer:
         if remainder != 0:
             chunked.append(encoded[len(encoded)-max_seq_length : len(encoded)])
         return chunked
+
+token = Tokenizer()
+chunked = token.tokenize_and_chunk_corpus()
+total_str = ""
+for i in chunked[0]:
+    total_str += str(i)
+
+print(total_str.replace("_", " "))

@@ -60,6 +60,7 @@ class Tokenizer:
     def bpe_train(self):
         characters = self.characterize(self.meditations, self.protected_tokens)
 
+
         vocab = sorted(list(set(characters)))
         vocab.append("<UNK>")
 
@@ -119,6 +120,7 @@ class Tokenizer:
 
             if rule: self.rules.append((rule[0])) 
 
+        vocab.insert(0, "<BEGIN>")
         self.vocab = vocab
 
     def tokenize_train(self):
@@ -177,7 +179,6 @@ class Tokenizer:
         encoded = []
 
         for token in tokens:
-
             try:
                 encoded.append(self.token_to_id[token])
             except Exception:
@@ -189,11 +190,11 @@ class Tokenizer:
         return [self.id_to_token[str(i)] for i in input_nums]
     
     def embed(self, encoded):
-        X = np.ndarray([self.E[i] for i in encoded])
+        X = np.array([self.E[i] for i in encoded])
         return X
 
     def positional(self, encoded):
-        positionals = np.zeros(len(encoded), self.d_model)
+        positionals = np.zeros((len(encoded), self.d_model))
         for pos in range(len(encoded)):
             for i in range(0, self.d_model, 2):
                 denominator = self.n ** (i / self.d_model)
@@ -213,6 +214,13 @@ class Tokenizer:
 
         return len(tokens) / len(words)
         
-
-tokenizer = Tokenizer()
-print(tokenizer.tpw_ratio())
+    def tokenize_and_chunk_corpus(self):
+        chunked = []
+        encoded = self.encode(self.meditations)
+        remainder = len(encoded) % max_seq_length
+        for i in range(0, len(encoded), max_seq_length):
+            chunk = [0] + encoded[i:i+max_seq_length-1]
+            chunked.append(chunk)
+        if remainder != 0:
+            chunked.append(encoded[len(encoded)-max_seq_length : len(encoded)])
+        return chunked

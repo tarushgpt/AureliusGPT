@@ -13,3 +13,4 @@ PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 min_freq = 30
 n = 10000
 epsilon = 10**-8
+max_tokens_inference = 50

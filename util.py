@@ -1,8 +1,8 @@
 import numpy as np
 
 class Util:
-    def softmax(self, n):
-        max_val = np.max(n, axis=1, keepdims=True)
+    def softmax(self, n, axis):
+        max_val = np.max(n, axis, keepdims=True)
         exp = np.exp(n-max_val)
         return exp / np.sum(exp, axis=1, keepdims=True)
 

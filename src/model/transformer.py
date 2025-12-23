@@ -1,31 +1,37 @@
 import numpy as np
 from tokenizer.tokenizer import Tokenizer
-from config import PROJECT_ROOT, d_k, d_v, d_model, d_ff, h, num_blocks, epsilon
+from config import PROJECT_ROOT, d_k, d_v, d_model, d_ff, h, num_blocks, epsilon, vocab_length
 from util import Util
 import os
 
 class Transformer:
-    def __init__(self):
-        self.tokenizer = Tokenizer()
+    def __init__(self, tokenizer):
+        self.tokenizer = tokenizer
+        self.util = Util()
         self.relpath = os.path.join(PROJECT_ROOT, "data", "weights")
         self.blocks = [TransformerBlock(num, self.relpath) for num in range(num_blocks)]
+        self.Wo_path = os.path.join(self.relpath, "Wo.npy")
+        if os.path.exists(self.Wo_path):
+            self.Wo = np.load(self.Wo_path)
+        else:
+            self.Wo = np.random.normal(0, 0.02, (vocab_length, d_model))
+            np.save(self.Wo_path, self.Wo)
 
-    def forward(self, input_str):
-        encoded = self.tokenizer.encode(input_str)
+    def forward(self, encoded):
         X = self.tokenizer.embed(encoded) + self.tokenizer.positional(encoded)
 
         Y = self.blocks[0].forward(X)
 
         for pos in range(len(self.blocks)-1):
             Y = self.blocks[pos+1].forward(Y)
-        
-        return Y
 
-    def ce_loss(self, predicted, actual):
-        return -sum(actual * np.log(predicted))
+        logits = Y @ self.Wo
     
+        return self.util.softmax(logits)
 
-    #note to self: CE loss is fundamentally broken, needs to be fixed after corrected forward pass (leave for now)
+
+    def ce_loss(self, probability, actual):
+        return -np.log(probability[actual])
 
 class TransformerBlock:
     def __init__(self, num, path):
